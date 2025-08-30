@@ -59,17 +59,16 @@ class Chat_system:
         data_init = {}
         noti_ins_deque = self.user_list[user_id].show_notification()
         for noti in noti_ins_deque:
-            if isinstance(noti,SystemNotification):
-                data_init['type'] = noti.get_noti_type()
-                data_init['title'] =  noti.get_title()
-                data_init['content'] = noti.get_content()
-                data_init['date_time'] = noti.get_time()
+            data_init['type'] = noti.get_noti_type()
+            data_init['title'] =  noti.get_title()
+            data_init['content'] = noti.get_content()
+            data_init['date_time'] = noti.get_time()
             data_output.append(data_init)
             data_init = {}
         return data_output
     def Logout(self):
         return None
-    def create_notification(self,notif_type,user_id,title,message):
+    def create_notification(self,notif_type,user_id,title,message,requester_id=None):
         if notif_type == 'SYS':
             if user_id == None:
                 for user in self.user_list.values():
@@ -77,9 +76,25 @@ class Chat_system:
                     noti_ins = SystemNotification(id_inifi,user.get_id(),title,message)
                     user.add_notifcation(noti_ins)
             else:
-                pass
+                id_inifi = 'ini_'+ str(self.noti_id_counter)
+                noti_ins = SystemNotification(id_inifi,self.user_list[user_id].get_id(),title,message)
+                self.user_list[user_id].add_notifcation(noti_ins)
+        elif notif_type == "FR":
+            if requester_id == None:
+                return "Error NO Requester"
+            else:
+                id_inifi = 'int_' + str(self.noti_id_counter)
+                title = "Request Add Friend From : " + self.user_list[requester_id].get_username()
+                message = 'You received a friend request from ' + self.user_list[requester_id].get_username() + " check [FRIEND] now."
+                noti_ins = FriendRequestNotification(id_inifi,user_id,requester_id,title,message,False)
+                self.user_list[user_id].add_notifcation(noti_ins)
+        elif notif_type == 'AF':
+            id_inifi = 'int_' + str(self.noti_id_counter)
+            title = "Friend request has been accepted From " + self.user_list[user_id].get_username()
+            message = f"Your friend[{self.user_list[user_id].get_username()}] request has been accepted."
+            noti_ins = FriendRequestNotification(id_inifi,requester_id,user_id,title,message,True)
+            self.user_list[requester_id].add_notifcation(noti_ins)
         self.noti_id_counter +=1
-
     def search_user_by_user_id(self,user_id):
         return self.user_list[user_id]  
 class User:
@@ -130,10 +145,11 @@ class Chatroom:
     def chat_history(self):
         pass
 class Notification:
-    def __init__(self,noti_id,title,content,noti_type):
+    def __init__(self,noti_id,title,user_id,content,noti_type):
         self.noti_id = noti_id
         self.title = title
         self.content = content
+        self.user_id = user_id
         self.timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         self.isRead = False
         self.noti_type = noti_type
@@ -149,21 +165,18 @@ class Notification:
     def get_time(self):
         return self.timestamp
 class FriendRequestNotification(Notification):
-    def __init__(self,user_id,requester_id,timestamp=None):
-        super().__init__(user_id,timestamp,'FR')
+    def __init__(self,noti_id,user_id,requester_id,title,content,status):
+        super().__init__(noti_id,title,user_id,content,'FR' if status == False else "FA")
         self.requester_id = requester_id
+        self.is_accepted = status
 class SystemNotification(Notification):
     def __init__(self,noti_id,user_id,title,content):
-        super().__init__(noti_id,title,content,'SYS')
-        self.user_id = user_id
+        super().__init__(noti_id,title,user_id,content,'SYS')
 class FriendRequest:
     def __init__(self):
         self.sender_id = None
         self.to_member_id = None
         self.is_accept = False
-
-
-
 class Node:
     def __init__(self,data):
         self.data = data
