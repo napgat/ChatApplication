@@ -18,10 +18,9 @@ class Chat_system:
         if check:
             for id in self.username_list_fname[f_name]:
                 user_ins = self.user_list[id]
-                print(user_ins.get_username(), user_ins.get_password())
                 if user_ins.get_username() == username:
                     if user_ins.get_password() == password:
-                        return user_ins
+                        return user_ins.get_id()
                     else:
                         return "Error : Idenify Fail Please fill Correct Password."
                 else:
@@ -40,8 +39,8 @@ class Chat_system:
                     user_ins = self.user_list[id]
                     if user_ins.get_username() == username_in:
                         return f"Error: Username '{username_in}' is already taken."
-            new_user = User(username_in,password_in)
             new_user_id = 'user_'+str(self.user_id)
+            new_user = User(new_user_id,username_in,password_in)
             self.user_list[new_user_id] = new_user
             self.username_list_fname[f_name].append(new_user_id)
             self.user_id += 1 
@@ -57,7 +56,8 @@ class Chat_system:
     def show_notification(self):
         pass
 class User:
-    def __init__(self,username,password):
+    def __init__(self,user_id,username,password):
+        self.user_id = user_id
         self.username = username 
         self.password = password
         self.friend_list = []
@@ -71,10 +71,14 @@ class User:
         pass
     def show_notication(self):
         pass
+    def get_all_friend(self):
+        return self.friend_list
     def get_username(self):
         return self.username
     def get_password(self):
         return self.password
+    def get_id(self):
+        return self.user_id
 class Message:
     def __init__(self):
         self.message_id = None
@@ -110,8 +114,8 @@ class FriendRequest:
 def initial_chat_system():
     chat_system = Chat_system()
     mock_users = [
-    {"username": "Naphat", "password": "123456789"},
     {"username": "Alice", "password": "alice1234"},
+    {"username": "Naphat", "password": "123456789"},
     {"username": "Alex", "password": "alex1234"},
     {"username": "Bob", "password": "bob5678"},
     {"username": "Charlie", "password": "charlie001"},
