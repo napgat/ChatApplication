@@ -1,6 +1,7 @@
-import time
+from datetime import datetime
 class Chat_system:
-    user_id = 0
+    user_id_counter = 0
+    noti_id_counter = 0
     def __init__(self):
         self.user_list = {}
         self.room_list = []
@@ -39,11 +40,11 @@ class Chat_system:
                     user_ins = self.user_list[id]
                     if user_ins.get_username() == username_in:
                         return f"Error: Username '{username_in}' is already taken."
-            new_user_id = 'user_'+str(self.user_id)
+            new_user_id = 'user_'+str(self.user_id_counter)
             new_user = User(new_user_id,username_in,password_in)
             self.user_list[new_user_id] = new_user
             self.username_list_fname[f_name].append(new_user_id)
-            self.user_id += 1 
+            self.user_id_counter += 1 
             return f"Registration successful for user: {username_in}"
         else:
             return f"Error: Username '{username_in}' must start with a letter."
@@ -53,8 +54,34 @@ class Chat_system:
         pass
     def create_group_chat(self):
         pass
-    def show_notification(self):
-        pass
+    def show_notification(self,user_id):
+        data_output = []
+        data_init = {}
+        noti_ins_deque = self.user_list[user_id].show_notification()
+        for noti in noti_ins_deque:
+            if isinstance(noti,SystemNotification):
+                data_init['type'] = noti.get_noti_type()
+                data_init['title'] =  noti.get_title()
+                data_init['content'] = noti.get_content()
+                data_init['date_time'] = noti.get_time()
+            data_output.append(data_init)
+            data_init = {}
+        return data_output
+    def Logout(self):
+        return None
+    def create_notification(self,notif_type,user_id,title,message):
+        if notif_type == 'SYS':
+            if user_id == None:
+                for user in self.user_list.values():
+                    id_inifi = 'ini_'+ str(self.noti_id_counter)
+                    noti_ins = SystemNotification(id_inifi,user.get_id(),title,message)
+                    user.add_notifcation(noti_ins)
+            else:
+                pass
+        self.noti_id_counter +=1
+
+    def search_user_by_user_id(self,user_id):
+        return self.user_list[user_id]  
 class User:
     def __init__(self,user_id,username,password):
         self.user_id = user_id
@@ -62,7 +89,7 @@ class User:
         self.password = password
         self.friend_list = []
         self.chat_room_list = []
-        self.notication_list = []
+        self.notification_deque = DEqueue()
     def send_friend_request(self):
         pass
     def accept_friend_request(self):
@@ -79,6 +106,10 @@ class User:
         return self.password
     def get_id(self):
         return self.user_id
+    def add_notifcation(self,notification):
+        self.notification_deque.insert_head(notification)
+    def show_notification(self):
+        return self.notification_deque.printList()
 class Message:
     def __init__(self):
         self.message_id = None
@@ -99,17 +130,99 @@ class Chatroom:
     def chat_history(self):
         pass
 class Notification:
-    def __init__(self):
-        self.noti_id = None
-        self.title = None
-        self.context_noti = None
-        self.time_stamp = None
+    def __init__(self,noti_id,title,content,noti_type):
+        self.noti_id = noti_id
+        self.title = title
+        self.content = content
+        self.timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         self.isRead = False
+        self.noti_type = noti_type
+        self.color = ''
+    def get_noti_id(self):
+        return self.noti_id
+    def get_noti_type(self):
+        return self.noti_type
+    def get_title(self):
+        return self.title
+    def get_content(self):
+        return self.content
+    def get_time(self):
+        return self.timestamp
+class FriendRequestNotification(Notification):
+    def __init__(self,user_id,requester_id,timestamp=None):
+        super().__init__(user_id,timestamp,'FR')
+        self.requester_id = requester_id
+class SystemNotification(Notification):
+    def __init__(self,noti_id,user_id,title,content):
+        super().__init__(noti_id,title,content,'SYS')
+        self.user_id = user_id
 class FriendRequest:
     def __init__(self):
         self.sender_id = None
         self.to_member_id = None
         self.is_accept = False
+
+
+
+class Node:
+    def __init__(self,data):
+        self.data = data
+        self.prev = None
+        self.next = None
+class DEqueue:
+    def __init__(self):
+        self.head = None
+        self.tail = None
+        self.size = 0
+    def insert_head(self,data):
+        new_node = Node(data)
+        if not self.head:
+            self.head = self.tail = new_node
+        else:
+            new_node.next = self.head
+            self.head.prev = new_node
+            self.head = new_node
+        self.size += 1
+    def insert_tail(self,data):
+        new_node = Node(data)
+        if not self.tail:
+            self.head = self.tail = new_node
+        else:
+            self.tail.next = new_node
+            new_node.prev = self.tail
+            self.tail = new_node
+        self.size += 1
+    def pop_head(self):
+        if not self.head:
+            return None
+        node = self.head
+        self.head = node.next
+        if self.head:
+            self.head.prev = None
+        else:
+            self.tail = None
+        self.size -= 1
+        return node.data
+    def pop_tail(self):
+        if not self.tail:
+            return None
+        node = self.tail
+        self.tail = node.prev
+        if self.tail:
+            self.tail.next = None
+        else:
+            self.head = None
+        self.size -= 1
+        return node.data
+    def __len__(self):
+        return self.size
+    def printList(self):
+        res = []
+        current = self.head
+        while current:
+            res.append(current.data)
+            current = current.next
+        return res            
 
 def initial_chat_system():
     chat_system = Chat_system()
