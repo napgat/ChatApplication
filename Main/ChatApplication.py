@@ -78,7 +78,6 @@ class Chat_system:
         self.friends_graph.get(user_id,set()).discard(friend_id)
         self.friends_graph.get(friend_id,set()).discard(user_id)
         return f"{self.search_user_by_user_id(user_id).get_username()} and {self.search_user_by_user_id(friend_id).get_username()} are no longer freinds." 
-
     def create_group_chat(self):
         pass
     def show_notification(self,user_id):
@@ -194,11 +193,6 @@ class FriendRequestNotification(Notification):
 class SystemNotification(Notification):
     def __init__(self,noti_id,user_id,title,content):
         super().__init__(noti_id,title,user_id,content,'SYS')
-class FriendRequest:
-    def __init__(self):
-        self.sender_id = None
-        self.to_member_id = None
-        self.is_accept = False
 class Node:
     def __init__(self,data):
         self.data = data
