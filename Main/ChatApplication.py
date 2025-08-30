@@ -5,10 +5,10 @@ class Chat_system:
     def __init__(self):
         self.user_list = {}
         self.room_list = []
-        self.username_list_fname = {}
+        self.friends_graph = {}  # user_id → set(friend_ids) เก็บเพื่อนแบบ Undirected Graph
+        self.pending_requests = {} # user_id → set(requester_ids) เก็บคำขอเพื่อนที่ยังไม่ได้ตอบ
+        self.username_list_fname = {chr(i): {} for i in range(ord('a'), ord('z') + 1)}
         self.chat_all = []
-        for i in range(ord('a'),ord('z') + 1):
-            self.username_list_fname[chr(i)] = []
     def check_first_char(self,username):
         first_char = username[0].lower()
         if first_char in self.username_list_fname:
@@ -16,42 +16,69 @@ class Chat_system:
         return [first_char,False]
     def Login(self,username,password):
         f_name,check = self.check_first_char(username)
-        if check:
-            for id in self.username_list_fname[f_name]:
-                user_ins = self.user_list[id]
-                if user_ins.get_username() == username:
-                    if user_ins.get_password() == password:
-                        return user_ins.get_id()
-                    else:
-                        return "Error : Idenify Fail Please fill Correct Password."
-                else:
-                    return "Error : Username not found,Please Register before login."
-            return "Error : UnCorrect Username."
-        else:
+        if not check:
             return "Error : Please fill Correct Username."
+        bucket = self.username_list_fname.get(f_name, {})
+
+        username_id_inbucket = bucket.get(username)
+        if not username_id_inbucket:
+             return "Error : Username not found,Please Register before login."
+        
+        user_ins = self.user_list[username_id_inbucket]
+        if user_ins.get_password() != password:
+            return "Error : Idenify Fail Please fill Correct Password."
+        return user_ins.get_id()
     def register_user(self,username_in,password_in):
-        if username_in == '' or password_in == '':
+        if not username_in  or not password_in :
             return "Error : Please fill Username and Passworkd again. "
         f_name,check = self.check_first_char(username_in)
-        if check:
-            #เช็คว้า username ซ้ำไม
-            if len(self.username_list_fname[f_name]) > 0:
-                for id in self.username_list_fname[f_name]:
-                    user_ins = self.user_list[id]
-                    if user_ins.get_username() == username_in:
-                        return f"Error: Username '{username_in}' is already taken."
-            new_user_id = 'user_'+str(self.user_id_counter)
-            new_user = User(new_user_id,username_in,password_in)
-            self.user_list[new_user_id] = new_user
-            self.username_list_fname[f_name].append(new_user_id)
-            self.user_id_counter += 1 
-            return f"Registration successful for user: {username_in}"
-        else:
+        if not check:
             return f"Error: Username '{username_in}' must start with a letter."
-    def send_friend_request(self):
+            #เช็คว้า username ซ้ำไม
+        bucket = self.username_list_fname[f_name]
+        if username_in in bucket:
+            return f"Error: Username '{username_in}' is already taken."
+        new_user_id = 'user_'+str(self.user_id_counter)
+        new_user = User(new_user_id,username_in,password_in)
+        self.user_list[new_user_id] = new_user
+        bucket[username_in] = new_user_id
+        self.user_id_counter += 1 
+        return f"Registration successful for user: {username_in}"
+    def send_friend_request(self,from_user_id,to_user_id):
+        if from_user_id == to_user_id:
+            return "Error : Cannot add yourself."
+        friends_set = self.friends_graph.get(from_user_id,set())
+        if to_user_id in friends_set:
+            return "Error : Already freinds."
+        pending_set = self.pending_requests.get(to_user_id,set())
+        if from_user_id in pending_set:
+            return "Error : Friend request already sent."
+        
+        self.pending_requests.setdefault(to_user_id,set()).add(from_user_id)
+        self.create_notification('FR',to_user_id,None,None,from_user_id)
+        return f"Friend request sent from {self.search_user_by_user_id(from_user_id).get_username()} to {self.search_user_by_user_id(to_user_id).get_username()}"
+    def accept_friend_quest(self,user_id,requester_id):
+        pending_set = self.pending_requests.get(user_id,set())
+        if requester_id not in pending_set:
+            return "Error: No pending request from this user."
+        # ลบคำขอจาก pending
+        pending_set.remove(requester_id)
+         # เพิ่มเพื่อนใน Graph
+        self.friends_graph.setdefault(user_id,set()).add(requester_id)
+        self.friends_graph.setdefault(requester_id,set()).add(user_id)
+
+        #สร้าง Notification ให้ผู้ส่งคำขอ
+        self.create_notification('AF',user_id,None,None,requester_id)
+        return f"{self.search_user_by_user_id(user_id)} and {self.search_user_by_user_id(requester_id)} are now Friend."
         pass
-    def accept_friend_quest(self):
-        pass
+    def show_friends(self,user_id):
+        frirend_ids = self.friends_graph.get(user_id,set())
+        return [self.user_list[fid].get_username() for fid in frirend_ids]
+    def remove_friend(self,user_id,friend_id):
+        self.friends_graph.get(user_id,set()).discard(friend_id)
+        self.friends_graph.get(friend_id,set()).discard(user_id)
+        return f"{self.search_user_by_user_id(user_id).get_username()} and {self.search_user_by_user_id(friend_id).get_username()} are no longer freinds." 
+
     def create_group_chat(self):
         pass
     def show_notification(self,user_id):
@@ -95,26 +122,21 @@ class Chat_system:
             noti_ins = FriendRequestNotification(id_inifi,requester_id,user_id,title,message,True)
             self.user_list[requester_id].add_notifcation(noti_ins)
         self.noti_id_counter +=1
+    def search_user_by_username(self,username):
+        f_name, _ = self.check_first_char(username)
+        bucket = self.username_list_fname.get(f_name, {})
+        user_id = bucket.get(username)
+        return self.user_list.get(user_id) if user_id else None
     def search_user_by_user_id(self,user_id):
-        return self.user_list[user_id]  
+        return self.user_list.get(user_id)
+
 class User:
     def __init__(self,user_id,username,password):
         self.user_id = user_id
         self.username = username 
         self.password = password
-        self.friend_list = []
         self.chat_room_list = []
         self.notification_deque = DEqueue()
-    def send_friend_request(self):
-        pass
-    def accept_friend_request(self):
-        pass
-    def remove_friend(self):
-        pass
-    def show_notication(self):
-        pass
-    def get_all_friend(self):
-        return self.friend_list
     def get_username(self):
         return self.username
     def get_password(self):
@@ -236,7 +258,6 @@ class DEqueue:
             res.append(current.data)
             current = current.next
         return res            
-
 def initial_chat_system():
     chat_system = Chat_system()
     mock_users = [
@@ -250,7 +271,8 @@ def initial_chat_system():
     {"username": "Frank", "password": "frank12345"},
     {"username": "Grace", "password": "gracepassword"},
     {"username": "Hannah", "password": "hannah2023"},
-    {"username": "Isaac", "password": "isaacpass123"}
+    {"username": "Isaac", "password": "isaacpass123"},
+    {"username": "IPEX", "password": "PEXAD"}
     ]
     for user in mock_users:
         chat_system.register_user(user["username"], user["password"])
