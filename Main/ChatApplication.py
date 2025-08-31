@@ -1,14 +1,17 @@
 from datetime import datetime
-class Chat_system:
+import random
+import string
+class Chat_Controller:
     user_id_counter = 0
     noti_id_counter = 0
+    room_id_counter = 0
     def __init__(self):
         self.user_list = {}
         self.room_list = []
+        self.room_code_map = {}  # room_code -> Chatroom
         self.friends_graph = {}  # user_id → set(friend_ids) เก็บเพื่อนแบบ Undirected Graph
         self.pending_requests = {} # user_id → set(requester_ids) เก็บคำขอเพื่อนที่ยังไม่ได้ตอบ
         self.username_list_fname = {chr(i): {} for i in range(ord('a'), ord('z') + 1)}
-        self.chat_all = []
     def check_first_char(self,username):
         first_char = username[0].lower()
         if first_char in self.username_list_fname:
@@ -78,8 +81,37 @@ class Chat_system:
         self.friends_graph.get(user_id,set()).discard(friend_id)
         self.friends_graph.get(friend_id,set()).discard(user_id)
         return f"{self.search_user_by_user_id(user_id).get_username()} and {self.search_user_by_user_id(friend_id).get_username()} are no longer freinds." 
-    def create_group_chat(self):
-        pass
+    def create_group_chat(self,creator_id,member_ids):
+        room_id = f"room_{self.room_id_counter}"
+        self.room_id_counter += 1
+
+        room_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        new_room = Chatroom(room_id=room_id,room_type='group',members=[creator_id]+member_ids,room_code=room_code)
+        self.room_list.append(new_room)
+        if new_room.get_room_code() :
+            self.room_code_map[new_room.room_code] = new_room
+
+        for uid in [creator_id]+member_ids:
+            self.user_list[uid].add_chat_room_user(new_room)
+        return f"Group chat {room_id} created with members:{[self.user_list[uid].get_username() for uid in [creator_id]+member_ids]} | Room Code : [{room_code}]"
+    def create_private_chat(self,user1_id,user2_id):
+        #check have?
+        for room in self.room_list:
+            if room.get_room_type() == 'private' and room.get_member() == {user1_id,user2_id}:
+                return f"Private chat already exists: {room.get_room_id()}"
+        #create
+        room_id = f"room_{self.room_id_counter}"
+        self.room_id_counter += 1
+        new_room = Chatroom(room_id=room_id,room_type='private',members=[user1_id,user2_id])
+        self.room_list.append(new_room)
+        
+        #add member
+        self.user_list[user1_id].add_chat_room_user(new_room)
+        self.user_list[user2_id].add_chat_room_user(new_room)
+        return f"Private chat '{room_id}' created between {self.user_list[user1_id].get_username()} and {self.user_list[user2_id].get_username()}"
+    def show_chat_in_user(self,user_id):
+        user = self.search_user_by_user_id(user_id)
+        return user.get_chat_room()
     def show_notification(self,user_id):
         data_output = []
         data_init = {}
@@ -128,13 +160,49 @@ class Chat_system:
         return self.user_list.get(user_id) if user_id else None
     def search_user_by_user_id(self,user_id):
         return self.user_list.get(user_id)
+    def search_room_by_room_code(self,room_code):
+        return self.room_code_map.get(room_code)
+    def search_room_by_room_id(self,room_id):
+        for room in self.room_list:
+            if room.get_room_id() == room_id:
+                return room
+        return None
+    def remove_chat_from_user(self,user_id,room_id):
+        pass
+    def join_chatroom(self,room_code,user_id):
+        user = self.search_user_by_user_id(user_id)
+        room = self.search_room_by_room_code(room_code)
+        if not user:
+            return "Error : User not found."
+        if not room:
+            return "Error : Room code not valid."
+        if user_id in room.get_member():
+            return f"{user.get_username()} is already in this room."
+        
+        room.add_member(user_id)
+        user.add_chat_room_user(room)
+        return f"{user.get_username()} joined room '{room.get_room_id()}' with code {room_code}"
+    def send_message_in_chatroom(self,room_id,user_id,content):
+        room = self.search_room_by_room_id(room_id)
+        user = self.search_user_by_user_id(user_id)
+        c = room.send_message(user,content)
+        return c
+    def edit_message_in_chatroom(self,room_id,msg_id,user_id,content_edit):
+        room = self.search_room_by_room_id(room_id)
+        return room.edit_message(msg_id,user_id,content_edit)
+    def delete_message_in_chatroom(self,room_id,msg_id,user_id):
+        room = self.search_room_by_room_id(room_id)
+        return room.edit_message(msg_id,user_id,'[ลบข้อความแล้ว]')
+    def chat_history(self,room_id):
+        room = self.search_room_by_room_id(room_id)
+        return room.chat_history()
 
 class User:
     def __init__(self,user_id,username,password):
         self.user_id = user_id
         self.username = username 
         self.password = password
-        self.chat_room_list = []
+        self.chat_room_list = ChatRoomList()
         self.notification_deque = DEqueue()
     def get_username(self):
         return self.username
@@ -146,25 +214,112 @@ class User:
         self.notification_deque.insert_head(notification)
     def show_notification(self):
         return self.notification_deque.printList()
+    def get_chat_room(self):
+        return self.chat_room_list.printRoom()
+    def add_chat_room_user(self,new_room):
+        self.chat_room_list.add_room(new_room)
 class Message:
-    def __init__(self):
-        self.message_id = None
-        self.sender_id = None
-        self.content = None
-        self.time_stamp = None
+    def __init__(self, message_id, sender_id,sender_name, content):
+        self.message_id = message_id
+        self.sender_id = sender_id
+        self.sender_name = sender_name
+        self.content = content
+        self.time_stamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    def get_content(self):
+        return self.content
+    def set_content(self,content):
+        self.content = content
+    def set_time(self):
+        self.time_stamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    def get_time(self):
+        return self.time_stamp
+    def get_sender_id(self):
+        return self.sender_id
+    def get_message_id(self):
+        return self.message_id
+    def get_sender_name(self):
+        return self.sender_name
 class Chatroom:
-    def __init__(self):
-        self.room_id = None
-        self.member_list = []
-        self.messages = None
-    def add_member(self):
-        pass
-    def remove_member(self):
-        pass
-    def send_message(self):
-        pass
+    def __init__(self,room_id,room_type, members=None,room_code=None):
+        self.room_id = room_id
+        self.room_type = room_type
+        self.member_list = set(members) if members else set()
+        self.messages_head = None
+        self.messages_tail = None
+        self.messages_map = {} # message_id -> MessageNode
+        self.messages_counter = 0
+        self.created_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self.room_code = room_code
+    def get_room_code(self):
+        return self.room_code
+    def add_member(self,user):
+        self.member_list.add(user)
+    def remove_member(self,user_id):
+        if user_id in self.member_list:
+            del self.member_list[user_id]
+            return True
+        return False
+    def send_message(self,sender,content):
+        if sender.get_id() not in self.member_list:
+            return f"Error : User not in this room"
+        message_id = f"{self.room_id}_msg_{self.messages_counter}"
+        msg =  Message(message_id=message_id,sender_id=sender.get_id(),sender_name=sender.get_username(), content=content)
+        node = Node(msg)
+        if not self.messages_head:
+            self.messages_head = self.messages_tail = node
+        else:
+            self.messages_tail.next = node
+            node.prev = self.messages_tail
+            self.messages_tail = node
+        self.messages_map[message_id] = node
+        self.messages_counter+=1
+        return message_id
+    def delete_message(self,message_id,sender_id):
+        node = self.messages_map.get(message_id)
+        if not node:
+            return "Error : Message not found."
+        if node.data.get_sender_id() != sender_id:
+            return "Error : Cannot delete others messages."
+        if node.prev:
+            node.prev.next = node.next
+        else:
+            self.messages_head = node.next
+        if node.next :
+            node.next.prev = node.prev
+        else:
+            self.messages_tail = node.prev
+        del self.messages_map[message_id]
+        return "Message deleted successfully."
+    def edit_message(self,message_id,sender_id,new_content):
+        node = self.messages_map.get(message_id)
+        if not node:
+            return f"Error: Message not found"
+        if node.data.get_sender_id() != sender_id:
+            return f"Error: Cannot edit others messages."
+        node.data.set_content(new_content)
+        node.data.set_time()
+        return "Message edited successfully."
     def chat_history(self):
-        pass
+        res = []
+        curr = self.messages_head
+        while curr:
+            m = curr.data
+            res.append({
+                'message_id' : m.get_message_id(),
+                'sender_id' : m.get_sender_id(),
+                'sender_name' : m.get_sender_name(),
+                'content': m.get_content(),
+                'time' : m.get_time()
+            })
+            curr = curr.next
+        return res
+    def get_room_id(self):
+        return self.room_id
+    def get_room_type(self):
+        return self.room_type
+    def get_member(self):
+
+        return self.member_list
 class Notification:
     def __init__(self,noti_id,title,user_id,content,noti_type):
         self.noti_id = noti_id
@@ -252,8 +407,69 @@ class DEqueue:
             res.append(current.data)
             current = current.next
         return res            
-def initial_chat_system():
-    chat_system = Chat_system()
+class ChatRoomList:
+    def __init__(self):
+        self.head = None
+        self.tail = None
+        self.map = {} # room_id -> node
+    def add_room(self,chatroom):
+        """เพิ่มห้องใหม่ หรือเลื่อนไปหัวถ้ามีอยู่แล้ว"""
+        room_id = chatroom.get_room_id()
+        if room_id in self.map:
+            node = self.map[room_id]
+            self.move_to_head(node)
+        else:
+            node = Node(chatroom)
+            self.map[room_id] = node
+            self.insert_head(node)
+    def remove_room(self,room_id):
+        node = self.map.get(room_id)
+        if not node:
+            return
+        if node.prev:
+            node.prev.next = node.next
+        if node.next:
+            node.next.prev = node.prev
+        if node == self.head:
+            self.head = node.next
+        if node == self.tail:
+            self.tail = node.prev
+        del self.map[room_id]
+    def get_room(self,room_id):
+        return self.map.get(room_id).data if room_id in self.map else None
+    def printRoom(self):
+        res = []
+        curr = self.head
+        while curr:
+            res.append(curr.data.get_room_id())
+            curr = curr.next
+        return res
+    def insert_head(self,node):
+        node.prev = None
+        node.next = self.head
+        if self.head : 
+            self.head.prev = node
+        self.head = node
+        if not self.tail:
+            self.tail = node
+    def move_to_head(self,node):
+        if node == self.head:
+            return
+        if node.prev:
+            node.prev.next == node.next
+        if node.next:
+            node.next.prev = node.prev
+        if node == self.tail:
+            self.tail = node.prev
+        node.prev = None
+        node.next = self.head
+        self.head.prev  = node
+        self.head = node
+
+        
+def initial_chat_controller():
+
+    chat_system = Chat_Controller()
     mock_users = [
     {"username": "Alice", "password": "alice1234"},
     {"username": "Naphat", "password": "123456789"},

@@ -1,6 +1,6 @@
 import Main.ChatApplication as ca
 #--------------initial-----------------
-chat_system = ca.initial_chat_system()
+chat_system = ca.initial_chat_controller()
 #--------------initial-----------------
 #เข้าสู่ระบบแล้วต้องได้ ins user กลับมา
 #เข้าสู่ระบบปกติ

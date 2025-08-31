@@ -1,6 +1,6 @@
 import Main.ChatApplication as ca
 #--------------initial-----------------
-chat_system = ca.initial_chat_system()
+chat_system = ca.initial_chat_controller()
 #เมื่อผู้ใช้ Login เข้ามาแล้ว
 user_id_login = chat_system.Login('Naphat','123456789')
 #--------------initial-----------------
