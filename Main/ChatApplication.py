@@ -62,10 +62,13 @@ class Chat_Controller:
             return "Error : Friend request already sent."
         
         self.pending_requests.setdefault(to_user_id,set()).add(from_user_id)
+        self.create_notification(notif_type='SYS',user_id=from_user_id,title='Friend Request Pending',message=f'You have sent a friend request to {self.search_user_by_user_id(to_user_id).get_username()}')
         self.create_notification('FR',to_user_id,None,None,from_user_id)
 
         return f"Friend request sent from {self.search_user_by_user_id(from_user_id).get_username()} to {self.search_user_by_user_id(to_user_id).get_username()}"
     def accept_friend_quest(self,user_id,requester_id):
+        #user_id ผู้รับ
+        #requester ผู้ส่ง
         pending_set = self.pending_requests.get(user_id,set())
         if requester_id not in pending_set:
             return "Error: No pending request from this user."
@@ -75,6 +78,7 @@ class Chat_Controller:
         self.friends_graph.setdefault(user_id,set()).add(requester_id)
         self.friends_graph.setdefault(requester_id,set()).add(user_id)
 
+        self.create_notification(notif_type='SYS',user_id=user_id,title='Friend Request Accepted',message=f'You have accepted {self.search_user_by_user_id(requester_id).get_username()}  friend request successfully')
         #สร้าง Notification ให้ผู้ส่งคำขอ
         self.create_notification('AF',user_id,None,None,requester_id)
         
@@ -85,37 +89,61 @@ class Chat_Controller:
     def remove_friend(self,user_id,friend_id):
         self.friends_graph.get(user_id,set()).discard(friend_id)
         self.friends_graph.get(friend_id,set()).discard(user_id)
+        print(user_id)
+        self.create_notification(notif_type='SYS',user_id=user_id,title='Friend Removed',message=f'You have removed {self.search_user_by_user_id(friend_id).get_username()}  from your friends list')
         return f"{self.search_user_by_user_id(user_id).get_username()} and {self.search_user_by_user_id(friend_id).get_username()} are no longer freinds." 
     def create_group_chat(self,creator_id,member_ids):
+        # เช็คว่า member_ids มีสมาชิกซ้ำหรือไม่
+        if not creator_id:
+            return "Error: Login first"
+        if creator_id in member_ids:
+            return "Error: Creator cannot be a member of the group."
+        if len(member_ids) != len(set(member_ids)):
+            return "Error: Duplicate member found in the list."
+        for member_id in member_ids:
+            if not self.is_friend(creator_id, member_id):
+                return f"Error: {self.user_list[creator_id].get_username()} is not friends with {self.user_list[member_id].get_username()}."
         room_id = f"room_{self.room_id_counter}"
         self.room_id_counter += 1
         room_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         new_room = Chatroom(room_id=room_id,room_type='group',members=[creator_id]+member_ids,room_code=room_code)
         self.room_list.append(new_room)
         if new_room.get_room_code() :
-            self.room_code_map[new_room.room_code()] = new_room
+            self.room_code_map[new_room.get_room_code()] = new_room
 
         for uid in [creator_id]+member_ids:
             self.user_list[uid].add_chat_room_user(new_room)
         return f"Group chat {room_id} created with members:{[self.user_list[uid].get_username() for uid in [creator_id]+member_ids]} | Room Code : [{room_code}]"
     def create_private_chat(self,user1_id,user2_id):
-        #check have?
-        for room in self.room_list:
-            if room.get_room_type() == 'private' and room.get_member() == {user1_id,user2_id}:
-                return f"Private chat already exists: {room.get_room_id()}"
-        #create
-        room_id = f"room_{self.room_id_counter}"
-        self.room_id_counter += 1
-        new_room = Chatroom(room_id=room_id,room_type='private',members=[user1_id,user2_id])
-        self.room_list.append(new_room)
-        
-        #add member
-        self.user_list[user1_id].add_chat_room_user(new_room)
-        self.user_list[user2_id].add_chat_room_user(new_room)
-        return f"Private chat '{room_id}' created between {self.user_list[user1_id].get_username()} and {self.user_list[user2_id].get_username()}"
+        if not user1_id:
+            return "Error: Login First"
+        if user1_id == user2_id:
+            return "You cannot create a private chat with your own name."
+        if self.is_friend(user1_id,user2_id):
+            #check have?
+            for room in self.room_list:
+                if room.get_room_type() == 'private' and room.get_member() == {user1_id,user2_id}:
+                    return f"Private chat already exists: {room.get_room_id()}"
+            #create
+            room_id = f"room_{self.room_id_counter}"
+            self.room_id_counter += 1
+            new_room = Chatroom(room_id=room_id,room_type='private',members=[user1_id,user2_id])
+            self.room_list.append(new_room)
+            
+            #add member
+            self.user_list[user1_id].add_chat_room_user(new_room)
+            self.user_list[user2_id].add_chat_room_user(new_room)
+            return f"Private chat '{room_id}' created between {self.user_list[user1_id].get_username()} and {self.user_list[user2_id].get_username()}"
+        return "You cannot create a private chat with this person because you are not friends yet or wrong username."
     def show_chat_in_user(self,user_id):
         user = self.search_user_by_user_id(user_id)
         return user.get_chat_room()
+    def is_friend(self, user_id, other_user_id):
+    # เช็คว่า user_id เป็นเพื่อนกับ other_user_id หรือไม่
+        friends_set = self.friends_graph.get(user_id, set())
+        if other_user_id in friends_set:
+            return True
+        return False
     def show_notification(self,user_id):
         data_output = []
         data_init = {}
@@ -130,6 +158,14 @@ class Chat_Controller:
         return data_output
     def Logout(self):
         return None
+    def get_chatroom_members(self, room_id):
+        # ค้นหาห้องแชทตาม room_id
+        room = self.search_room_by_room_id(room_id)
+        if not room:
+            return "Error: Room not found."
+        
+        # คืนค่ารายชื่อสมาชิกในห้องแชท
+        return [(uid, self.user_list[uid].get_username()) for uid in room.get_member()]
     def create_notification(self,notif_type,user_id,title,message,requester_id=None):
         if notif_type == 'SYS':
             if user_id == None:
@@ -150,6 +186,7 @@ class Chat_Controller:
                 message = 'You received a friend request from ' + self.user_list[requester_id].get_username() + " check [FRIEND] now."
                 noti_ins = FriendRequestNotification(id_inifi,user_id,requester_id,title,message,False)
                 self.user_list[user_id].add_notifcation(noti_ins)
+
         elif notif_type == 'AF':
             id_inifi = 'int_' + str(self.noti_id_counter)
             title = "Friend request has been accepted From " + self.user_list[user_id].get_username()
@@ -174,6 +211,8 @@ class Chat_Controller:
     def remove_chat_from_user(self,user_id,room_id):
         pass
     def join_chatroom(self,room_code,user_id):
+        if not user_id:
+            return "Error : Login First"
         user = self.search_user_by_user_id(user_id)
         room = self.search_room_by_room_code(room_code)
         if not user:
@@ -201,6 +240,24 @@ class Chat_Controller:
     def chat_history(self,room_id):
         room = self.search_room_by_room_id(room_id)
         return room.chat_history()
+    def remove_member_from_chatroom(self, room_id, user_id, operator_id):
+        # ค้นหาห้องแชทตาม room_id
+        room = self.search_room_by_room_id(room_id)
+        if not room:
+            return "Error: Room not found."
+        
+        # เช็คว่าผู้ใช้คือสมาชิกในห้องนี้หรือไม่
+        if user_id not in room.get_member():
+            return f"Error: {self.user_list[user_id].get_username()} is not a member of this room."
+        
+        # ลบสมาชิกออกจากห้องแชท
+        room.remove_member(user_id)
+        self.user_list[user_id].remove_chat_room_user(room)
+        
+        # สร้างข้อความแจ้งให้ผู้ดำเนินการทราบ
+        operator_name = self.user_list[operator_id].get_username()
+        removed_user_name = self.user_list[user_id].get_username()
+        return f"{operator_name} has removed {removed_user_name} from room {room.get_room_id()}"
 
 class User:
     def __init__(self,user_id,username,password):
@@ -217,6 +274,9 @@ class User:
         return self.user_id
     def add_notifcation(self,notification):
         self.notification_deque.insert_head(notification)
+    def remove_chat_room_user(self, room):
+        """ ลบสมาชิกออกจากห้องแชทในรายการห้องแชทของผู้ใช้ """
+        self.chat_room_list.remove_room(room.get_room_id())
     def show_notification(self):
         return self.notification_deque.printList()
     def get_chat_room(self):
@@ -248,6 +308,7 @@ class Chatroom:
     def __init__(self,room_id,room_type, members=None,room_code=None):
         self.room_id = room_id
         self.room_type = room_type
+        # self.room_title = room_title
         self.member_list = set(members) if members else set()
         self.messages_head = None
         self.messages_tail = None
@@ -550,31 +611,6 @@ def divider(parent):
     f.pack(fill="x", pady=8)
     return f
 
-# ---------- แพตช์บั๊กเล็กๆ ของ create_group_chat ----------
-def patch_create_group_chat(controller):
-    """
-    แก้จุดเรียก new_room.room_code() (ที่ไม่มีเมธอด) ให้เก็บ mapping ด้วย get_room_code()
-    โดยผูกฟังก์ชันนี้เป็นเมธอดของอินสแตนซ์ controller เท่านั้น (ไม่กระทบคลาสต้นฉบับ)
-    """
-    import types
-
-    def _create_group_chat(self, creator_id, member_ids):
-        room_id = f"room_{self.room_id_counter}"
-        self.room_id_counter += 1
-        import random, string
-        room_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        new_room = Chatroom(room_id=room_id, room_type='group',
-                            members=[creator_id] + member_ids, room_code=room_code)
-        self.room_list.append(new_room)
-        # ใช้ get_room_code() ให้ถูกต้อง
-        if new_room.get_room_code():
-            self.room_code_map[new_room.get_room_code()] = new_room
-
-        for uid in [creator_id] + member_ids:
-            self.user_list[uid].add_chat_room_user(new_room)
-        return f"Group chat {room_id} created with members:{[self.user_list[uid].get_username() for uid in [creator_id]+member_ids]} | Room Code : [{room_code}]"
-
-    controller.create_group_chat = types.MethodType(_create_group_chat, controller)
 
 # ---------- แอปหลัก ----------
 class ChatApp(tk.Tk):
@@ -584,7 +620,6 @@ class ChatApp(tk.Tk):
 
         # สร้างระบบ + แพตช์
         self.controller = controller_factory()
-        patch_create_group_chat(self.controller)
 
         self.current_user_id = None
         self.current_username = None
@@ -955,6 +990,7 @@ class ChatApp(tk.Tk):
         res = self.controller.remove_friend(self.current_user_id, fid)
         messagebox.showinfo("Remove Friend", res)
         self.refresh_friends()
+        self.refresh_notifications()
 
     # ---------- Rooms tab ----------
     def build_rooms_tab(self):
@@ -1046,6 +1082,9 @@ class ChatApp(tk.Tk):
         self.refresh_my_rooms()
 
     def create_group_chat(self):
+        if not self.current_user_id:
+            messagebox.showerror("Error", "กรุณนาเข้าสู่ระบบเพื่อดำเนินการต่อ")
+            return
         names = [x.strip() for x in self.group_members_var.get().split(",") if x.strip()]
         if not names:
             messagebox.showwarning("Input", "กรุณากรอกชื่อเพื่อนอย่างน้อย 1 คน")
@@ -1057,12 +1096,12 @@ class ChatApp(tk.Tk):
                 messagebox.showerror("Not found", f"ไม่พบผู้ใช้: {n}")
                 return
             member_ids.append(u.get_id())
-
         res = self.controller.create_group_chat(self.current_user_id, member_ids)
         if isinstance(res, str) and res.startswith("Error"):
             messagebox.showerror("Create Group", res)
         else:
-            self.group_result_lbl.config(text=res)
+            # self.group_result_lbl.config(text=res)
+            #ต้องเป็นแจ้งเตือน
             self.refresh_my_rooms()
 
     def open_selected_room(self):

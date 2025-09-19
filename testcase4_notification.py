@@ -26,7 +26,7 @@ for noti in output:
     """)
     print("-----------------------------------")
 
-#เมื่อ userนี้ตอบรับ เพิ่มเพื่อนไอดีนี้
+#เมื่อ userนี้ตอบรับ เพิ่มเพื่อนไอดีนี้ #คนส่งได้รับ
 chat_system.create_notification(notif_type='AF',user_id=user_id_login,title=None,message=None,requester_id='user_2')
 #กดปุ่มแสดงการแจ้งเตือน
 
@@ -40,3 +40,16 @@ for noti in output:
     Date:{noti['date_time']}
     """)
     print("-----------------------------------")
+
+#เพิ่มเพื่อน
+#คนส่ง <-บอกว่าส่งให้ใคร ผู้ส่ง ผู้รับ /
+
+#คนรับ <- บอกว่าได้คำขอจากใคร /
+# chat_system.create_notification(notif_type='FR',user_id=user_id_login,title=None,message=None,requester_id='user_2')
+#คนรับรับเพื่อน <-คุณได้รับเพื่อน /
+#คนส่ง<- ได้รับว่าเพื่อนที่คุณได้รับการเพิ่มเพื่อนแล้ว /
+# chat_system.create_notification(notif_type='AF',user_id=user_id_login,title=None,message=None,requester_id='user_2')
+
+#สร้างห้องแชท
+#ห้องแชทส่วนตัว
+#สร้างห้องแชทเป็นกลุ่ม

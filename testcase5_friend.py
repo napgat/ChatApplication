@@ -16,15 +16,7 @@ print(user_id_login_2)
 
 #กดปุ่มแสดงการแจ้งเตือน
 output = chat_system.show_notification(user_id_login_2)
-#แสดงการแจ้งเตือน
-for noti in output:
-    print("-----------------------------------")
-    print(f"""
-    ({noti['type']})Title : {noti['title']}
-    {noti['content']}
-    Date:{noti['date_time']}
-    """)
-    print("-----------------------------------")
+
 #กดยอมรับเพื่อน
 print(chat_system.accept_friend_quest(user_id_login_2,user_id_login))
 
@@ -48,6 +40,18 @@ print(chat_system.show_friends(user_id_login_2))
 
 #Naphat กดยกเลิกเพื่อน Alex
 print(chat_system.remove_friend(user_id_login,user_id_login_2))
+
+output = chat_system.show_notification(user_id_login)
+#แสดงการแจ้งเตือน
+for noti in output:
+    print("-----------------------------------")
+    print(f"""
+    ({noti['type']})Title : {noti['title']}
+    {noti['content']}
+    Date:{noti['date_time']}
+    """)
+    print("-----------------------------------")
+
 #Naphat กดแสดงชื่อเพื่อนอีกครั้ง
 print(chat_system.show_friends(user_id_login))
 #Alex กดแสดงชื่อเพื่อน
